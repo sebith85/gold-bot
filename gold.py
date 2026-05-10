@@ -1,3 +1,23 @@
+# ==============================
+# 🌐 FLASK (FOR RENDER FREE FIX)
+# ==============================
+from flask import Flask
+import threading
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running ✅"
+
+def run_web():
+    app.run(host="0.0.0.0", port=10000)
+
+threading.Thread(target=run_web).start()
+
+# ==============================
+# 📦 IMPORTS
+# ==============================
 import requests
 import pandas as pd
 import ta
@@ -24,7 +44,7 @@ def send_message(text):
 # ==============================
 last_signal = ""
 last_trade_time = 0
-cooldown = 300  # 5 min
+cooldown = 300
 
 wins = 0
 losses = 0
@@ -39,15 +59,11 @@ while True:
     try:
         print("🚀 Running...")
 
-        # ==============================
         # 📊 PRICE
-        # ==============================
         data = requests.get("https://api.gold-api.com/price/XAU").json()
         price = float(data["price"]) / 2
 
-        # ==============================
         # 📈 HISTORY
-        # ==============================
         hist = requests.get("https://api.gold-api.com/price/XAU?days=50").json()
         prices = [i["price"]/2 for i in hist.get("prices", [])]
 
@@ -57,14 +73,11 @@ while True:
         prices.append(price)
         df = pd.DataFrame(prices, columns=["close"])
 
-        # ==============================
         # 📊 INDICATORS
-        # ==============================
         df["ema200"] = df["close"].ewm(span=200).mean()
         df["ema50"] = df["close"].ewm(span=50).mean()
         df["ema20"] = df["close"].ewm(span=20).mean()
         df["ema5"] = df["close"].ewm(span=5).mean()
-
         df["rsi"] = ta.momentum.RSIIndicator(df["close"]).rsi()
 
         macd = ta.trend.MACD(df["close"])
@@ -73,29 +86,25 @@ while True:
 
         df["vol"] = df["close"].rolling(5).std()
 
-        # ==============================
-        # 🧠 VALUES
-        # ==============================
         last = df.iloc[-1]
 
         ema200 = last["ema200"]
         ema50 = last["ema50"]
         ema20 = last["ema20"]
         ema5 = last["ema5"]
-
         rsi = last["rsi"]
-        if pd.isna(rsi):
-            rsi = 50
-
         macd_val = last["macd"]
         macd_sig = last["macd_signal"]
-
         vol = last["vol"]
+
+        # FIX NaN
+        if pd.isna(rsi):
+            rsi = 50
         if pd.isna(vol):
             vol = 1
 
         # ==============================
-        # 🧠 LOGIC
+        # 🧠 LOGIC (IMPROVED)
         # ==============================
         score = 0
 
@@ -116,18 +125,21 @@ while True:
 
         score += 1 if macd_val > macd_sig else -1
 
-        # LESS STRICT FILTER (more signals)
-        if score >= 3:
-            signal = "BUY"
-        elif score <= -3:
-            signal = "SELL"
-        else:
+        # 🔥 SIDEWAYS FILTER (SMART)
+        if 47 < rsi < 53 and vol < 0.8:
             signal = "WAIT"
+        else:
+            if score >= 3:
+                signal = "BUY"
+            elif score <= -3:
+                signal = "SELL"
+            else:
+                signal = "WAIT"
 
         # ==============================
-        # 🎯 SL / TP
+        # 🎯 SL / TP (BETTER)
         # ==============================
-        sl_points = max(5, vol)   # tighter
+        sl_points = max(5, vol * 1.5)
         tp_points = sl_points * 2
 
         if signal == "BUY":
@@ -142,7 +154,7 @@ while True:
             entry = sl = tp = 0
 
         # ==============================
-        # 💾 SAVE FILE
+        # 💾 SAVE
         # ==============================
         with open("signal.json", "w") as f:
             json.dump({
